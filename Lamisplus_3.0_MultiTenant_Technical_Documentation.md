@@ -1,6 +1,79 @@
 # Lamisplus 3.0 - Multi-Tenant Healthcare Platform
 ## Technical Documentation
 
+## Technical Documentation
+
+---
+
+## Table of Contents
+
+- [Document Control](#document-control)
+- [1. Overview](#1-overview)
+  - [Application Name](#application-name)
+  - [Purpose](#purpose)
+  - [Scope](#scope)
+  - [Audience](#audience)
+- [2. System Architecture](#2-system-architecture)
+  - [High-Level Architecture](#high-level-architecture)
+  - [Core Components](#core-components)
+    - [1. Frontend (React 18 + Module Federation)](#1-frontend-react-18--module-federation)
+    - [2. Spring Boot Core Application](#2-spring-boot-core-application)
+    - [3. Database Layer (PostgreSQL)](#3-database-layer-postgresql)
+  - [Technology Stack](#technology-stack)
+  - [Deployment Models](#deployment-models)
+- [3. Multi-Tenancy Implementation](#3-multi-tenancy-implementation)
+  - [Schema-per-Tenant Strategy](#schema-per-tenant-strategy)
+  - [Tenant Context Management](#tenant-context-management)
+  - [Database Schema Switching](#database-schema-switching)
+  - [Tenant Isolation Guarantees](#tenant-isolation-guarantees)
+- [4. Plugin System Architecture](#4-plugin-system-architecture)
+  - [Plugin Structure](#plugin-structure)
+  - [Plugin Lifecycle](#plugin-lifecycle)
+  - [Plugin Loading Process](#plugin-loading-process)
+  - [Plugin Security](#plugin-security)
+  - [Hot-Reloading Plugins](#hot-reloading-plugins)
+- [5. Security & Authentication](#5-security--authentication)
+  - [JWT Authentication](#jwt-authentication)
+  - [Role-Based Access Control (RBAC)](#role-based-access-control-rbac)
+  - [Permission System](#permission-system)
+  - [Security Filters](#security-filters)
+  - [Audit Logging](#audit-logging)
+- [6. Configuration & Setup](#6-configuration--setup)
+  - [Application Properties](#application-properties)
+  - [Database Configuration](#database-configuration)
+  - [Security Configuration](#security-configuration)
+  - [Environment Profiles](#environment-profiles)
+- [7. Code Components](#7-code-components)
+  - [Core Entities](#core-entities)
+  - [Services](#services)
+  - [Repositories](#repositories)
+  - [Controllers](#controllers)
+  - [Filters](#filters)
+- [8. Data Management](#8-data-management)
+  - [Schema Migrations](#schema-migrations)
+  - [Backup Strategies](#backup-strategies)
+  - [Data Lifecycle](#data-lifecycle)
+- [9. Deployment & DevOps](#9-deployment--devops)
+  - [Production Deployment](#production-deployment)
+  - [Monitoring](#monitoring)
+  - [Operational Procedures](#operational-procedures)
+- [10. API Documentation](#10-api-documentation)
+  - [Authentication Endpoints](#authentication-endpoints)
+  - [User Management Endpoints](#user-management-endpoints)
+  - [Error Responses](#error-responses)
+- [11. Error Handling & Logging](#11-error-handling--logging)
+  - [Global Exception Handler](#global-exception-handler)
+- [12. Scaling & Performance](#12-scaling--performance)
+  - [Connection Pooling (HikariCP)](#connection-pooling-hikaricp)
+  - [Caching Strategy](#caching-strategy)
+  - [Circuit Breaker (Resilience4j)](#circuit-breaker-resilience4j)
+- [13. Tenant Lifecycle Management](#13-tenant-lifecycle-management)
+  - [Tenant States](#tenant-states)
+- [14. Appendices](#14-appendices)
+  - [Appendix A: Glossary](#appendix-a-glossary)
+  - [Appendix B: References](#appendix-b-references)
+- [Conclusion](#conclusion)
+
 ---
 
 ## Document Control
@@ -81,7 +154,7 @@ Lamisplus 3.0 follows a modern layered architecture with multi-tenancy support a
 +-------------------------------------------------------------+
 |                  API Gateway / Load Balancer                |
 |         (Spring Boot Embedded Tomcat / Nginx)               |
-|  - SSL/TLS Termination    - Rate Limiting per Tenant       |
+|  - SSL/TLS Termination    - Rate Limiting per Tenant        |
 |  - Request Routing        - Health Checks                   |
 +-------------------------------------------------------------+
                            |
@@ -89,27 +162,27 @@ Lamisplus 3.0 follows a modern layered architecture with multi-tenancy support a
                            v
 +-------------------------------------------------------------+
 |              Security & Tenant Resolution Layer             |
-|  +------------------------------------------------------+  |
-|  |  TenantResolutionFilter (Highest Priority)           |  |
-|  |  - Extract X-Tenant-Id from header or JWT            |  |
-|  |  - Set TenantContext (ThreadLocal)                   |  |
-|  |  - Validate tenant format and permissions            |  |
-|  +------------------------------------------------------+  |
-|                           |                                  |
-|                           v                                  |
-|  +------------------------------------------------------+  |
-|  |  JwtAuthenticationFilter                             |  |
-|  |  - Validate JWT tokens                               |  |
-|  |  - Extract user, roles, and tenant from token        |  |
-|  |  - Set Spring Security Context                       |  |
-|  +------------------------------------------------------+  |
-|                           |                                  |
-|                           v                                  |
-|  +------------------------------------------------------+  |
-|  |  PluginAuthorizationFilter                           |  |
-|  |  - Verify plugin-specific permissions                |  |
-|  |  - Validate tenant has plugin enabled                |  |
-|  +------------------------------------------------------+  |
+|  +------------------------------------------------------+   |
+|  |  TenantResolutionFilter (Highest Priority)           |   |
+|  |  - Extract X-Tenant-Id from header or JWT            |   |
+|  |  - Set TenantContext (ThreadLocal)                   |   |
+|  |  - Validate tenant format and permissions            |   |
+|  +------------------------------------------------------+   |
+|                           |                                 |
+|                           v                                 |
+|  +------------------------------------------------------+   |
+|  |  JwtAuthenticationFilter                             |   |
+|  |  - Validate JWT tokens                               |   |
+|  |  - Extract user, roles, and tenant from token        |   |
+|  |  - Set Spring Security Context                       |   |
+|  +------------------------------------------------------+   |
+|                           |                                 |
+|                           v                                 |
+|  +------------------------------------------------------+   |
+|  |  PluginAuthorizationFilter                           |   |
+|  |  - Verify plugin-specific permissions                |   |
+|  |  - Validate tenant has plugin enabled                |   |
+|  +------------------------------------------------------+   |
 +-------------------------------------------------------------+
                            |
                            |
@@ -132,25 +205,25 @@ Lamisplus 3.0 follows a modern layered architecture with multi-tenancy support a
                            v
 +-------------------------------------------------------------+
 |              Data Layer (PostgreSQL 14+)                    |
-|  +------------------------------------------------------+  |
-|  |  Schema: _system_ (Global Metadata)                  |  |
-|  |  - tenants                                           |  |
-|  |  - global_plugins                                    |  |
-|  |  - super_admin_audit_log                            |  |
-|  +------------------------------------------------------+  |
-|  +------------------------------------------------------+  |
-|  |  Schema: tenant_clinic_a (Tenant-Specific)          |  |
-|  |  - users, roles, permissions                        |  |
-|  |  - plugin_configs                                   |  |
-|  |  - audit_events                                     |  |
-|  |  - refresh_tokens                                   |  |
-|  +------------------------------------------------------+  |
-|  +------------------------------------------------------+  |
-|  |  Schema: tenant_hospital_b (Tenant-Specific)        |  |
-|  |  - users, roles, permissions                        |  |
-|  |  - plugin_configs                                   |  |
-|  |  - audit_events                                     |  |
-|  +------------------------------------------------------+  |
+|  +------------------------------------------------------+   |
+|  |  Schema: _system_ (Global Metadata)                  |   |
+|  |  - tenants                                           |   |
+|  |  - global_plugins                                    |   |
+|  |  - super_admin_audit_log                            |    |
+|  +------------------------------------------------------+   |
+|  +------------------------------------------------------+   |
+|  |  Schema: tenant_clinic_a (Tenant-Specific)          |    |
+|  |  - users, roles, permissions                        |    |
+|  |  - plugin_configs                                   |    |
+|  |  - audit_events                                     |    |
+|  |  - refresh_tokens                                   |    |
+|  +------------------------------------------------------+   |
+|  +------------------------------------------------------+   |
+|  |  Schema: tenant_hospital_b (Tenant-Specific)        |    |
+|  |  - users, roles, permissions                        |    |
+|  |  - plugin_configs                                   |    |
+|  |  - audit_events                                     |    |
+|  +------------------------------------------------------+   |
 +-------------------------------------------------------------+
                            |
                            |
@@ -1680,8 +1753,8 @@ Lamisplus 3.0 implements stateless JWT-based authentication with refresh tokens 
 |  Client  |                                      |  Auth Service  |
 +----+-----+                                      +--------+-------+
      |                                                     |
-     | 1. POST /auth/login                                |
-     |    {tenant_id, username, password, remember_me}    |
+     | 1. POST /auth/login                                 |
+     |    {tenant_id, username, password, remember_me}     |
      +---------------------------------------------------->|
      |                                                     |
      |                              2. Validate credentials|
@@ -1691,7 +1764,7 @@ Lamisplus 3.0 implements stateless JWT-based authentication with refresh tokens 
      |                              6. Store refresh token |
      |                                                     |
      | 7. Return tokens                                    |
-     |    {access_token, refresh_token (cookie)}          |
+     |    {access_token, refresh_token (cookie)}           |
      |<----------------------------------------------------+
      |                                                     |
      | 8. API Request                                      |
@@ -1707,7 +1780,7 @@ Lamisplus 3.0 implements stateless JWT-based authentication with refresh tokens 
      | 13. Response                                        |
      |<----------------------------------------------------+
      |                                                     |
-     | 14. POST /auth/refresh (when JWT expires)          |
+     | 14. POST /auth/refresh (when JWT expires)           |
      |     Cookie: refreshToken=<token>                    |
      +---------------------------------------------------->|
      |                                                     |
